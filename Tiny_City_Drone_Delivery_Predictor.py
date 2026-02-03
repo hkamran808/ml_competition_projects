@@ -65,3 +65,32 @@ print("Constant columns:", constant_cols)
 assert set(train_df.columns) - {"on_time"} == set(test_df.columns)
 print("Shape of datasets: ", train_df.shape, test_df.shape)
 print("All sanity checks passed!")
+
+# Converting direction to vectors
+for df in [train_df, test_df]:
+    df[["wind_direction", "wind_speed", "wind_gust"]] = df["wind"].str.split("_", expand=True)
+    df["wind_direction"] = pd.to_categorical(df["wind_direction"], errors="coerce")
+    df["wind_speed"] = pd.to_numeric(df["wind_speed"], errors="coerce")
+    df["wind_gust"] = pd.to_numeric(df["wind_gust"], errors="coerce")
+    df.drop(columns=["wind"], inplace=True)
+
+def route_features(route_list):
+    route_len = len(route_list)
+    route_sum = sum(route_list)
+    route_abs_sum = sum(abs(x) for x in route_list)
+    route_zero_ratio = route_list.count(0) / len(route_list) if len(route_list) > 0 else 0
+    route_positive_ratio = sum(1 for x in route_list if x > 0) / len(route_list) if len(route_list) > 0 else 0
+    route_negative_ratio = sum(1 for x in route_list if x < 0) / len(route_list) if len(route_list) > 0 else 0
+
+    return pd.Series([route_len, route_sum, route_abs_sum,
+                      route_zero_ratio, route_positive_ratio, route_negative_ratio])
+
+
+route_features_list = ["route_len", "route_sum", "route_abs_sum", 
+                       "route_zero_ratio", "route_positive_ratio", "route_negative_ratio"]
+for df in [train_df, test_df]:
+    df[route_features_list] = df["route"].apply(route_features)
+    df.drop(columns=["route"], inplace=True)
+
+train_df["net_distance"] = train_df["route_sum"].abs()
+test_df["net_distance"] = test_df["route_sum"].abs()
