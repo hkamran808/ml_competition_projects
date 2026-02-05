@@ -94,3 +94,24 @@ for df in [train_df, test_df]:
 
 train_df["net_distance"] = train_df["route_sum"].abs()
 test_df["net_distance"] = test_df["route_sum"].abs()
+
+# Altitude sequences and basic feature exploration
+for df in [train_df, test_df]:
+     df["altitude"] = df["altitude"].str.split(",").apply(
+         lambda x: [int(val) for val in x])
+
+def altitude_features(altitude_list):
+    altitude_len = len(altitude_list)
+    altitude_max = max(altitude_list)
+    altitude_min = min(altitude_list)
+    altitude_range = altitude_max - altitude_min
+    altitude_mean = sum(altitude_list) / altitude_len if altitude_len > 0 else 0
+    altitude_std = np.std(altitude_list)
+
+    diffs = [altitude_list[i+1] - altitude_list[i] for i in range(len(altitude_list)-1)]
+    altitude_upward_sum = sum(abs(x) for x in diffs if x > 0)
+    altitude_downward_sum = sum(abs(x) for x in diffs if x < 0)
+
+    return pd.Series([altitude_len, altitude_max, altitude_min, 
+                      altitude_range, altitude_mean, altitude_std, 
+                      altitude_upward_sum, altitude_downward_sum])
