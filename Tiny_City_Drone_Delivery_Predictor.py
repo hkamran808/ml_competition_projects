@@ -124,10 +124,11 @@ from sklearn.metrics import accuracy_score, classification_report, confusion_mat
 x = train_df.drop("target")
 y = train_df["target"]
 
-X_train, X_test, Y_train, Y_test = train_test_split(x, y, test_size=0.3, random_state=0)
+X_train, X_test, Y_train, Y_test = train_test_split(x, y, stratify=y, test_size=0.3, random_state=0)
 model = RandomForestClassifier(n_estimators=100, random_state=0)
 model.fit(X_train, Y_train)
 predictions = model.predict(X_test)
+probabilities = model.predict_proba(X_test)[:,1]
 
 accuracy = accuracy_score(Y_test, predictions)
 print("Accuracy:", accuracy)
@@ -135,4 +136,19 @@ print("classification_report: ", classification_report(Y_test, predictions))
 print("confusion_matrix: ", confusion_matrix(Y_test, predictions))
 print(10*"-", "Modeling completed!", 10*"-")
 
-#residuals = Y_test - predictions
+full_dataset_predictions = model.predict(test_df)
+print("Predictions for test dataset: [should be saved to submit if it was for a competition] \n", full_dataset_predictions)
+
+# feature importance from RF model
+importances_df = pd.DataFrame({
+    "Feature": x.columns,
+    "Importance": model.feature_importances_
+}).sort_values(by="Importance", ascending=False)
+
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+plt.figure(figsize=(10, 6))
+sns.barplot(data=importances_df, x="Importance", y="Feature")
+plt.title("Feature Importances from Random Forest Model")
+plt.show()
