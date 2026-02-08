@@ -152,3 +152,33 @@ plt.figure(figsize=(10, 6))
 sns.barplot(data=importances_df, x="Importance", y="Feature")
 plt.title("Feature Importances from Random Forest Model")
 plt.show()
+
+# hyperparameter tuning with cross-validation
+print(10*"-", "After Hyperparameters & Cross-Validation", 10*"-")
+from sklearn.model_selection import cross_val_score
+
+max_depth_list = [5, 10, 15, 20]
+min_samples_list = [2, 5, 10]
+#scores = []
+
+best_score = 0
+best_params = None
+
+for max_d in max_depth_list:
+    for min_s in min_samples_list:
+        model = RandomForestClassifier(
+            max_depth=max_d,
+            min_samples_split=min_s,  # or min_samples_leaf, etc...
+            n_estimators=100,
+            random_state=42
+        )
+
+        cv_score = cross_val_score(model, X_train, Y_train, cv=5, scoring="roc_auc").mean()
+        if cv_score > best_score:
+            best_score = cv_score
+            best_params = (max_d, min_s)
+        #scores.append(cv_score)
+        print(f"max_depth: {max_d}, min_samples_split: {min_s}, Cross-validated AUC score: {cv_score}")
+#print("Best Cross-validated score: ", max(scores)) #optional
+print("Best Cross-validated score: ", best_score)
+print("Best hyperparameters: ", best_params)
