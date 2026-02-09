@@ -69,10 +69,14 @@ print("All sanity checks passed!")
 # Converting direction to vectors
 for df in [train_df, test_df]:
     df[["wind_direction", "wind_speed", "wind_gust"]] = df["wind"].str.split("_", expand=True)
-    df["wind_direction"] = pd.to_categorical(df["wind_direction"], errors="coerce")
+    df["wind_direction"] = pd.to_numeric(df["wind_direction"], errors="coerce")
     df["wind_speed"] = pd.to_numeric(df["wind_speed"], errors="coerce")
     df["wind_gust"] = pd.to_numeric(df["wind_gust"], errors="coerce")
     df.drop(columns=["wind"], inplace=True)
+
+import ast
+for df in [train_df, test_df]:
+    df["route"] = df["route"].apply(ast.literal_eval)
 
 def route_features(route_list):
     route_len = len(route_list)
@@ -97,8 +101,7 @@ test_df["net_distance"] = test_df["route_sum"].abs()
 
 # Altitude sequences and basic feature exploration
 for df in [train_df, test_df]:
-     df["altitude"] = df["altitude"].str.split(",").apply(
-         lambda x: [int(val) for val in x])
+    df["altitude"] = df["altitude"].apply(ast.literal_eval)
 
 def altitude_features(altitude_list):
     altitude_len = len(altitude_list)
@@ -110,7 +113,7 @@ def altitude_features(altitude_list):
 
     diffs = [altitude_list[i+1] - altitude_list[i] for i in range(len(altitude_list)-1)]
     altitude_upward_sum = sum(abs(x) for x in diffs if x > 0)
-    altitude_downward_sum = sum(abs(x) for x in diffs if x < 0)
+    altitude_downward_sum = abs(sum(x for x in diffs if x < 0))
 
     return pd.Series([altitude_len, altitude_max, altitude_min, 
                       altitude_range, altitude_mean, altitude_std, 
@@ -121,11 +124,20 @@ from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 
-x = train_df.drop("target")
-y = train_df["target"]
+x = train_df.drop("on_time", axis=1)
+y = train_df["on_time"]
 
 X_train, X_test, Y_train, Y_test = train_test_split(x, y, stratify=y, test_size=0.3, random_state=0)
 model = RandomForestClassifier(n_estimators=100, random_state=0)
+
+# checking for categorical columns (if any) to apply encoding in process
+X_all = pd.concat([X_train, X_test], axis=0)
+categorical_cols = X_all.select_dtypes(include=["object", "category"]).columns
+X_all = pd.get_dummies(X_all, columns=categorical_cols, drop_first=True)
+
+X_train = X_all.iloc[:len(X_train)]
+X_test = X_all.iloc[len(X_train):]
+
 model.fit(X_train, Y_train)
 predictions = model.predict(X_test)
 probabilities = model.predict_proba(X_test)[:,1]
@@ -169,7 +181,7 @@ for max_d in max_depth_list:
         model = RandomForestClassifier(
             max_depth=max_d,
             min_samples_split=min_s,  # or min_samples_leaf, etc...
-            n_estimators=100,
+            n_estimators=200,
             random_state=42
         )
 
@@ -182,3 +194,17 @@ for max_d in max_depth_list:
 #print("Best Cross-validated score: ", max(scores)) #optional
 print("Best Cross-validated score: ", best_score)
 print("Best hyperparameters: ", best_params)
+"""
+# we retrain the model on the full training data and generate predictions for the test set with best hyperparameters
+final_model = RandomForestClassifier(
+    max_depth = ,
+    min_samples_split = ,
+    n_estimators = 200,
+    random_state = 0)
+
+final_model.fit(X_train, Y_train)
+
+best_predictions = final_model.predict(test_df)
+best_probabilities = final_model.predict_proba(test_df)[:, 1]  # for ROC-AUC / submission (if needed...)
+print("Modeling procedures are compeletely done!")
+"""
