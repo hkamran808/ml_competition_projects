@@ -130,8 +130,14 @@ y = train_df["on_time"]
 X_train, X_test, Y_train, Y_test = train_test_split(x, y, stratify=y, test_size=0.3, random_state=0)
 model = RandomForestClassifier(n_estimators=100, random_state=0)
 
-# checking for categorical columns (if any) to apply encoding in process
 X_all = pd.concat([X_train, X_test], axis=0)
+# checking for categorical columns (if any) to apply encoding in process
+# dropping non-hashable columns (like lists) for now, since .get_dummies can't handle them
+list_cols = [
+    col for col in X_all.columns
+    if X_all[col].apply(lambda x: isinstance(x, list)).any()]
+X_all = X_all.drop(columns=list_cols)
+
 categorical_cols = X_all.select_dtypes(include=["object", "category"]).columns
 X_all = pd.get_dummies(X_all, columns=categorical_cols, drop_first=True)
 
@@ -148,12 +154,15 @@ print("classification_report: ", classification_report(Y_test, predictions))
 print("confusion_matrix: ", confusion_matrix(Y_test, predictions))
 print(10*"-", "Modeling completed!", 10*"-")
 
-full_dataset_predictions = model.predict(test_df)
-print("Predictions for test dataset: [should be saved to submit if it was for a competition] \n", full_dataset_predictions)
+# Generating predictions for the test dataset too to not get error (after applying same preprocessing)
+test_df_encoded = pd.get_dummies(test_df, columns=categorical_cols, drop_first=True)
+test_df_encoded = test_df_encoded.reindex(columns=X_train.columns, fill_value=0)
+full_dataset_predictions = model.predict(test_df_encoded)
+print("Predictions for test dataset: [should've been saved to submit if it was for a competition] \n", full_dataset_predictions)
 
 # feature importance from RF model
 importances_df = pd.DataFrame({
-    "Feature": x.columns,
+    "Feature": X_train.columns,
     "Importance": model.feature_importances_
 }).sort_values(by="Importance", ascending=False)
 
@@ -194,17 +203,16 @@ for max_d in max_depth_list:
 #print("Best Cross-validated score: ", max(scores)) #optional
 print("Best Cross-validated score: ", best_score)
 print("Best hyperparameters: ", best_params)
-"""
+
 # we retrain the model on the full training data and generate predictions for the test set with best hyperparameters
 final_model = RandomForestClassifier(
-    max_depth = ,
-    min_samples_split = ,
+    max_depth = 5,
+    min_samples_split = 5,
     n_estimators = 200,
     random_state = 0)
 
 final_model.fit(X_train, Y_train)
 
-best_predictions = final_model.predict(test_df)
-best_probabilities = final_model.predict_proba(test_df)[:, 1]  # for ROC-AUC / submission (if needed...)
+best_predictions = final_model.predict(test_df_encoded)
+best_probabilities = final_model.predict_proba(test_df_encoded)[:, 1]  # for ROC-AUC / submission (if needed...)
 print("Modeling procedures are compeletely done!")
-"""
