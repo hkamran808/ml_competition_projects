@@ -35,7 +35,6 @@ print("Columns with potential sequences:", sequence_cols)
 constant_cols = [col for col in train_df.columns if train_df[col].nunique() == 1]
 print("Constant columns:", constant_cols)
 
-assert set(train_df.columns) - {"target"} == set(test_df.columns), "Train and test columns mismatch!"
+assert set(train_df.columns) - {"Survived"} == set(test_df.columns), "Train and test columns mismatch!"
 
 print("Basic sanity checks DONE successfully!")
-#Day 10: Initial dataset loading and sanity checks completed successfully!
