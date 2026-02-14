@@ -52,16 +52,25 @@ for row in train_df["Name"]:
 """
 train_df["Title"] = train_df["Name"].apply(lambda x: re.search(" ([A-Za-z]+)\.", x).group(1) if re.search(" ([A-Za-z]+)\.", x) else "Unknown")
 test_df["Title"] = test_df["Name"].apply(lambda x: re.search(" ([A-Za-z]+)\.", x).group(1) if re.search(" ([A-Za-z]+)\.", x) else "Unknown")
+
+count_rare_titles = train_df["Title"].value_counts()[train_df["Title"].value_counts() < 10].index
+
 print("Unique titles in train_df: ", train_df["Title"].value_counts())
 print("Unique titles in test_df: ", test_df["Title"].value_counts())
 
-count_rare_titles = train_df["Title"].value_counts()[train_df["Title"].value_counts() < 10].index
-count_rare_titles = test_df["Title"].value_counts()[test_df["Title"].value_counts() < 10].index
+train_df["Title"] = train_df["Title"].apply(lambda x: "Rare" if x in count_rare_titles else x)
+test_df["Title"] = test_df["Title"].apply(lambda x: "Rare" if x in count_rare_titles else x)
 
-for df in [train_df, test_df]:
-    for row in df["Title"]:
-        if row in count_rare_titles:
-            print(f"Others: {row}")
+# encoding titles to numeric for modeling
+from sklearn.preprocessing import LabelEncoder
+le = LabelEncoder()
+train_df["Title_encoded"] = le.fit_transform(train_df["Title"])
+test_df["Title_encoded"] = le.transform(test_df["Title"])
+"""
+# the one better for random forest IS get dummies method
+train_df = pd.get_dummies(train_df["Title"], prefix="Title", dtype=int)
+test_df = pd.get_dummies(test_df["Title"], prefix="Title", dtype=int)
+"""
 
 # family size feature engineering
 train_df["family_size"] = train_df["SibSp"] + train_df["Parch"] + 1
@@ -79,3 +88,35 @@ print(f"Correlation of isAlone with Survived: {corr_isAlone_train}")
 
 train_df.drop(columns=["PassengerId", "Name", "Ticket", "Cabin"], inplace=True)
 test_df.drop(columns=["PassengerId", "Name", "Ticket", "Cabin"], inplace=True)
+
+# handling missing values in Age and Embarked for potential modeling
+from sklearn.impute import SimpleImputer
+imputer = SimpleImputer(strategy="median")
+train_df["Age"] = imputer.fit_transform(train_df[["Age"]])
+test_df["Age"] = imputer.transform(test_df[["Age"]])
+
+imputer_embarked = SimpleImputer(strategy="most_frequent")
+train_df["Embarked"] = imputer_embarked.fit_transform(train_df[["Embarked"]])
+test_df["Embarked"] = imputer_embarked.transform(test_df[["Embarked"]])
+
+# categoricals
+train_df["Sex"] = train_df["Sex"].map({"male": 1, "female": 0})
+test_df["Sex"] = test_df["Sex"].map({"male": 1, "female": 0})
+
+train_df["Embarked"] = pd.get_dummies(train_df["Embarked"], prefix="Embarked", dtype=int)
+test_df["Embarked"] = pd.get_dummies(test_df["Embarked"], prefix="Embarked", dtype=int)
+assert train_df.shape[1] == test_df.shape[1] + 1 , f"columns match"
+
+# feature scaling for numeric features
+from sklearn.preprocessing import StandardScaler
+scaler = StandardScaler()
+train_df[["Age", "Fare", "SibSp", "Parch", "family_size"]] = scaler.fit_transform(train_df[["Age", "Fare", "SibSp", "Parch", "family_size"]])
+test_df[["Age", "Fare", "SibSp", "Parch", "family_size"]] = scaler.transform(test_df[["Age", "Fare", "SibSp", "Parch", "family_size"]])
+
+# train-test splitting for modeling
+from sklearn.model_selection import train_test_split
+x = train_df.drop(columns=["Survived"])
+y = train_df["Survived"]
+X_train, X_test, Y_train, Y_test = train_test_split(x, y, test_size=0.3, random_state=1, stratify=y)
+
+# ... building the model (linear/logistic probably)
