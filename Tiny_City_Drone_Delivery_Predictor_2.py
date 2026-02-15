@@ -40,9 +40,10 @@ assert set(train_df.columns) - {"Survived"} == set(test_df.columns), "Train and 
 
 print("Basic sanity checks DONE successfully!")
 
-# Title Extraction with regex for potential feature engineering
+# Title Extraction with regex for feature engineering
 import re
 """
+# titles:
 for row in train_df["Name"]:
     title = re.search(" ([A-Za-z]+)\.", row)
     if title:
@@ -61,17 +62,21 @@ print("Unique titles in test_df: ", test_df["Title"].value_counts())
 train_df["Title"] = train_df["Title"].apply(lambda x: "Rare" if x in count_rare_titles else x)
 test_df["Title"] = test_df["Title"].apply(lambda x: "Rare" if x in count_rare_titles else x)
 
-# encoding titles to numeric for modeling
+"""
+# encoding titles to numeric for modeling (this one is less ideal for rf)
 from sklearn.preprocessing import LabelEncoder
 le = LabelEncoder()
 train_df["Title_encoded"] = le.fit_transform(train_df["Title"])
 test_df["Title_encoded"] = le.transform(test_df["Title"])
 """
-# the one better for random forest IS get dummies method
-train_df = pd.get_dummies(train_df["Title"], prefix="Title", dtype=int)
-test_df = pd.get_dummies(test_df["Title"], prefix="Title", dtype=int)
-"""
-
+# better for random forest - encoding titles with one-hot encoding
+dummy_train_df = pd.get_dummies(train_df["Title"], prefix="Title", dtype=int)
+dummy_test_df = pd.get_dummies(test_df["Title"], prefix="Title", dtype=int)
+train_df = pd.concat([train_df, dummy_train_df], axis=1)
+test_df = pd.concat([test_df, dummy_test_df], axis=1)
+for df in [train_df, test_df]:
+    df.drop(columns=["Title"], inplace=True)
+    
 # family size feature engineering
 train_df["family_size"] = train_df["SibSp"] + train_df["Parch"] + 1
 test_df["family_size"] = test_df["SibSp"] + test_df["Parch"] + 1
@@ -103,20 +108,38 @@ test_df["Embarked"] = imputer_embarked.transform(test_df[["Embarked"]])
 train_df["Sex"] = train_df["Sex"].map({"male": 1, "female": 0})
 test_df["Sex"] = test_df["Sex"].map({"male": 1, "female": 0})
 
-train_df["Embarked"] = pd.get_dummies(train_df["Embarked"], prefix="Embarked", dtype=int)
-test_df["Embarked"] = pd.get_dummies(test_df["Embarked"], prefix="Embarked", dtype=int)
-assert train_df.shape[1] == test_df.shape[1] + 1 , f"columns match"
+# same for Embarked - one-hot encoding
+dummy_train_df1 = pd.get_dummies(train_df["Embarked"], prefix="Embarked", dtype=int)
+dummy_test_df1 = pd.get_dummies(test_df["Embarked"], prefix="Embarked", dtype=int)
+train_df = pd.concat([train_df, dummy_train_df1], axis=1)
+test_df = pd.concat([test_df, dummy_test_df1], axis=1)
+for df in [train_df, test_df]:
+    df.drop(columns=["Embarked"], inplace=True)
+test_df = test_df.reindex(columns=train_df.columns.drop("Survived"), fill_value=0)
 
-# feature scaling for numeric features
+"""
+# feature scaling for numeric features - not needed for tree-based models (since we now use rf)
 from sklearn.preprocessing import StandardScaler
 scaler = StandardScaler()
 train_df[["Age", "Fare", "SibSp", "Parch", "family_size"]] = scaler.fit_transform(train_df[["Age", "Fare", "SibSp", "Parch", "family_size"]])
 test_df[["Age", "Fare", "SibSp", "Parch", "family_size"]] = scaler.transform(test_df[["Age", "Fare", "SibSp", "Parch", "family_size"]])
-
+"""
 # train-test splitting for modeling
 from sklearn.model_selection import train_test_split
 x = train_df.drop(columns=["Survived"])
 y = train_df["Survived"]
 X_train, X_test, Y_train, Y_test = train_test_split(x, y, test_size=0.3, random_state=1, stratify=y)
 
-# ... building the model (linear/logistic probably)
+# ... building the model (rf is chosen for now)
+from sklearn.ensemble import RandomForestClassifier
+model = RandomForestClassifier(n_estimators=200, random_state=1, n_jobs=-1, 
+                               max_leaf_nodes=10, max_depth=None, class_weight="balanced")
+model.fit(X_train, Y_train)
+predictions = model.predict(X_test)
+probabilities = model.predict_proba(X_test)[:,1] #[:, 0] for class 0 probabilities (negatives)
+
+print(10*"-", "METRICS of OUR MODEL", 10*"-")
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+print("Accuracy: ", accuracy_score(Y_test, predictions))
+print("Classification Report: \n", classification_report(Y_test, predictions))
+print("Confusion Matrix: \n", confusion_matrix(Y_test, predictions))
