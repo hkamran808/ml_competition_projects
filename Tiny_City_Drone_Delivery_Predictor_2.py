@@ -132,8 +132,14 @@ X_train, X_test, Y_train, Y_test = train_test_split(x, y, test_size=0.3, random_
 
 # ... building the model (rf is chosen for now)
 from sklearn.ensemble import RandomForestClassifier
-model = RandomForestClassifier(n_estimators=200, random_state=1, n_jobs=-1, 
-                               max_leaf_nodes=10, max_depth=None, class_weight="balanced")
+from sklearn.model_selection import cross_val_score
+
+for n in [100, 200, 300]:
+    model = RandomForestClassifier(n_estimators=n, max_leaf_nodes=10, random_state=1, 
+                                   n_jobs=-1, max_depth=None, class_weight="balanced")
+    cv_scores = cross_val_score(model, X_train, Y_train, cv=5, scoring="roc_auc")
+    print(f"n_estimators={n}, mean ROC AUC CV score={cv_scores.mean()}")
+
 model.fit(X_train, Y_train)
 predictions = model.predict(X_test)
 probabilities = model.predict_proba(X_test)[:,1] #[:, 0] for class 0 probabilities (negatives)
