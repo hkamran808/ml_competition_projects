@@ -190,10 +190,27 @@ print("Accuracy: ", accuracy_score(Y_test, val_predictions))
 print("Classification Report: \n", classification_report(Y_test, val_predictions))
 print("Confusion Matrix: \n", confusion_matrix(Y_test, val_predictions))
 
+# feature_importances_
+importances = best_model.feature_importances_
+feat_imp = pd.Series(importances, index=x.columns)
+feat_imp = feat_imp.sort_values(ascending=False)
+
+# plotting feature importances
+import matplotlib.pyplot as plt
+
+plt.figure(figsize=(10,6))
+feat_imp.head(15).plot(kind="bar")
+plt.title("Top Feature Importances - Random Forest")
+plt.ylabel("Importance")
+plt.xlabel("Features")
+plt.tight_layout()
+plt.show()
+
 # final evaluation on test set
 final_model = best_model
 final_model.fit(x, y)
 predictions = final_model.predict(test_df)
+
 """
 # save predictions to csv for submission
 passenger_ids = test_df["PassengerId"]
