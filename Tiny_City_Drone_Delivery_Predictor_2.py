@@ -101,8 +101,8 @@ train_df["Age"] = imputer.fit_transform(train_df[["Age"]])
 test_df["Age"] = imputer.transform(test_df[["Age"]])
 
 imputer_embarked = SimpleImputer(strategy="most_frequent")
-train_df["Embarked"] = imputer_embarked.fit_transform(train_df[["Embarked"]])
-test_df["Embarked"] = imputer_embarked.transform(test_df[["Embarked"]])
+train_df["Embarked"] = imputer_embarked.fit_transform(train_df[["Embarked"]])[:,0]
+test_df["Embarked"] = imputer_embarked.transform(test_df[["Embarked"]])[:,0]
 
 # categoricals
 train_df["Sex"] = train_df["Sex"].map({"male": 1, "female": 0})
@@ -134,13 +134,14 @@ X_train, X_test, Y_train, Y_test = train_test_split(x, y, test_size=0.3, random_
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import cross_val_score
 
-for n in [100, 200, 300]:
-    model = RandomForestClassifier(n_estimators=n, max_leaf_nodes=10, random_state=1, 
-                                   n_jobs=-1, max_depth=None, class_weight="balanced")
-    cv_scores = cross_val_score(model, X_train, Y_train, cv=5, scoring="roc_auc")
-    print(f"n_estimators={n}, mean ROC AUC CV score={cv_scores.mean()}")
+# with some for loops best n value is determined to be 20 for max_leaf_nodes, 10 for max depth, 200 for n_estimators
+model = RandomForestClassifier(n_estimators=200, max_leaf_nodes=20, random_state=1, 
+                                   n_jobs=-1, max_depth=10, class_weight="balanced")
+cv_scores = cross_val_score(model, X_train, Y_train, cv=5, scoring="roc_auc")
+print(f"BEST mean ROC AUC CV score after tuning => {cv_scores.mean()}")
 
 model.fit(X_train, Y_train)
+#model.fit(x, y) fitting on the entire training set for final evaluation on test set
 predictions = model.predict(X_test)
 probabilities = model.predict_proba(X_test)[:,1] #[:, 0] for class 0 probabilities (negatives)
 
