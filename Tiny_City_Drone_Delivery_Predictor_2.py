@@ -133,8 +133,8 @@ X_train, X_test, Y_train, Y_test = train_test_split(x, y, test_size=0.3, random_
 # ... building the model (rf is chosen for now)
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import cross_val_score
-
-# with some for loops best n value is determined to be 20 for max_leaf_nodes, 10 for max depth, 200 for n_estimators
+"""
+# MANUAL TUNING: with some for loops best n value is determined to be 20 for max_leaf_nodes, 10 for max depth, 200 for n_estimators
 model = RandomForestClassifier(n_estimators=200, max_leaf_nodes=20, random_state=1, 
                                    n_jobs=-1, max_depth=10, class_weight="balanced")
 cv_scores = cross_val_score(model, X_train, Y_train, cv=5, scoring="roc_auc")
@@ -144,9 +144,63 @@ model.fit(X_train, Y_train)
 #model.fit(x, y) fitting on the entire training set for final evaluation on test set
 predictions = model.predict(X_test)
 probabilities = model.predict_proba(X_test)[:,1] #[:, 0] for class 0 probabilities (negatives)
+"""
+# AUTOMATIC HYPERPARAMETER TUNING with GridSearchCV
+from sklearn.model_selection import GridSearchCV
 
-print(10*"-", "METRICS of OUR MODEL", 10*"-")
+rf = RandomForestClassifier(
+    n_estimators=200,
+    max_depth=10,
+    max_leaf_nodes=20,
+    random_state=1,
+    n_jobs=-1)
+
+param_grid = {
+    "min_samples_split": [2, 5, 10],
+    "min_samples_leaf": [1, 2, 4],
+    "max_features": ["sqrt", "log2", None],
+    "bootstrap": [True, False],
+    "class_weight": [None, "balanced"]}
+
+grid = GridSearchCV(
+    estimator=rf,
+    param_grid=param_grid,
+    scoring="roc_auc",
+    cv=5,
+    n_jobs=-1,
+    verbose=1)
+
+grid.fit(X_train, Y_train)
+print("Best parameters:", grid.best_params_)
+print("Best CV score:", grid.best_score_)
+
+best_model = grid.best_estimator_
+
+# Validation ROC AUC evaluation AND other metrics on the validation set
+best_model.fit(X_train, Y_train)
+val_predictions = best_model.predict(X_test)
+val_probabilities = best_model.predict_proba(X_test)[:, 1]
+
+from sklearn.metrics import roc_auc_score
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
-print("Accuracy: ", accuracy_score(Y_test, predictions))
-print("Classification Report: \n", classification_report(Y_test, predictions))
-print("Confusion Matrix: \n", confusion_matrix(Y_test, predictions))
+
+print("Validation ROC AUC:", roc_auc_score(Y_test, val_probabilities))
+print(10*"-", "METRICS of OUR MODEL", 10*"-")
+print("Accuracy: ", accuracy_score(Y_test, val_predictions))
+print("Classification Report: \n", classification_report(Y_test, val_predictions))
+print("Confusion Matrix: \n", confusion_matrix(Y_test, val_predictions))
+
+# final evaluation on test set
+final_model = best_model
+final_model.fit(x, y)
+predictions = final_model.predict(test_df)
+"""
+# save predictions to csv for submission
+passenger_ids = test_df["PassengerId"]
+submission = pd.DataFrame({
+    "PassengerId": passenger_ids,
+    "Survived": predictions
+})
+submission.to_csv("kamran's_titanic_rf_submission.csv", index=False)
+print("Submission file created successfully!", 10*"-", "PROJECT 2 DONE!", sep="\n")
+"""
