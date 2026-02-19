@@ -211,6 +211,18 @@ final_model = best_model
 final_model.fit(x, y)
 predictions = final_model.predict(test_df)
 
+# permutation importance for more robust feature importance evaluation
+from sklearn.inspection import permutation_importance
+
+perm_importance = permutation_importance(final_model, X_test, Y_test, 
+                                         n_repeats=10, random_state=1, n_jobs=-1)
+
+perm_df = pd.DataFrame({
+    "feature": X_test.columns,
+    "importance": perm_importance.importances_mean}).sort_values("importance", ascending=False)
+
+print(perm_df)
+
 """
 # save predictions to csv for submission
 passenger_ids = test_df["PassengerId"]
