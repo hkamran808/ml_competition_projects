@@ -147,6 +147,7 @@ probabilities = model.predict_proba(X_test)[:,1] #[:, 0] for class 0 probabiliti
 """
 # AUTOMATIC HYPERPARAMETER TUNING with GridSearchCV
 from sklearn.model_selection import GridSearchCV
+from sklearn.ensemble import ExtraTreesClassifier
 
 rf = RandomForestClassifier(
     n_estimators=200,
@@ -154,6 +155,13 @@ rf = RandomForestClassifier(
     max_leaf_nodes=20,
     random_state=1,
     n_jobs=-1)
+
+et = ExtraTreesClassifier(
+    n_estimators=300,
+    random_state=1,
+    n_jobs=-1,
+    class_weight="balanced"
+)
 
 param_grid = {
     "min_samples_split": [2, 5, 10],
@@ -173,6 +181,10 @@ grid = GridSearchCV(
 grid.fit(X_train, Y_train)
 print("Best parameters:", grid.best_params_)
 print("Best CV score:", grid.best_score_)
+
+et.fit(X_train, Y_train)
+et_cv_scores = cross_val_score(et, X_train, Y_train, cv=5, scoring="roc_auc")
+print(f"Extra Trees mean ROC AUC CV score => {et_cv_scores.mean()}") # => 0.8492563008100523
 
 best_model = grid.best_estimator_
 
