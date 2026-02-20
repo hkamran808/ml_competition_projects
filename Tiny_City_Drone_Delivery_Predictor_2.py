@@ -178,15 +178,19 @@ grid = GridSearchCV(
     n_jobs=-1,
     verbose=1)
 
+drop_cols = ["Embarked_Q", "Embarked_C", "Title_Mrs", "Embarked_S"]
+X_cleaned = x.drop(columns=drop_cols)
+
 grid.fit(X_train, Y_train)
+et.fit(X_train, Y_train)
+
 print("Best parameters:", grid.best_params_)
 print("Best CV score:", grid.best_score_)
 
-et.fit(X_train, Y_train)
-et_cv_scores = cross_val_score(et, X_train, Y_train, cv=5, scoring="roc_auc")
-print(f"Extra Trees mean ROC AUC CV score => {et_cv_scores.mean()}") # => 0.8492563008100523
-
 best_model = grid.best_estimator_
+
+et_cv_scores = cross_val_score(et, X_cleaned, y, cv=5, scoring="roc_auc")
+print(f"Extra Trees mean ROC AUC CV score (*PRUNED) => {et_cv_scores.mean()}") # => 0.8492563008100523 (*0.8583039516707629 after pruning)
 
 # Validation ROC AUC evaluation AND other metrics on the validation set
 best_model.fit(X_train, Y_train)
