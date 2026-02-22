@@ -86,22 +86,73 @@ train_df["isAlone"] = is_Alone.astype(int)
 is_Alone_test = test_df["family_size"] == 1
 test_df["isAlone"] = is_Alone_test.astype(int)
 
-# boosting feature engineering with fare per person, age bins and sex*class interaction
-train_df["fare_per_person"] = train_df["Fare"] / train_df["family_size"]
-test_df["fare_per_person"] = test_df["Fare"] / test_df["family_size"]
+# boosting feature engineering with fare per person, fare&age bins and sex*class interaction
+train_df["FarePerPerson"] = (train_df["Fare"] / train_df["family_size"]).fillna(0)
+test_df["FarePerPerson"] = (test_df["Fare"] / test_df["family_size"]).fillna(0)
 
-train_df["Age_bin"] = pd.cut(train_df["Age"], bins=5, labels=False)
-test_df["Age_bin"] = pd.cut(test_df["Age"], bins=5, labels=False)
+train_df["FPP_bin"] = pd.qcut(
+    train_df["FarePerPerson"],
+    4,
+    labels=["Low", "Mid", "High", "VeryHigh"])
+
+test_df["FPP_bin"] = pd.qcut(
+    test_df["FarePerPerson"],
+    4,
+    labels=["Low", "Mid", "High", "VeryHigh"])
+
+farepp_train = pd.get_dummies(train_df["FPP_bin"], prefix="FPPBin", dtype=int)
+farepp_test = pd.get_dummies(test_df["FPP_bin"], prefix="FPPBin", dtype=int)
+train_df = pd.concat([train_df, farepp_train], axis=1)
+test_df = pd.concat([test_df, farepp_test], axis=1)
+
+train_df.drop(columns=["FPP_bin"], inplace=True)
+test_df.drop(columns=["FPP_bin"], inplace=True)
+
+
+train_df["Age_bin"] = pd.cut(train_df["Age"], 
+                             bins=[0, 12, 20, 40, 60, 80], 
+                             labels=["Child", "Teen", "Adult", "MidAge", "Senior"])
+test_df["Age_bin"] = pd.cut(test_df["Age"], 
+                            bins=[0, 12, 20, 40, 60, 80], 
+                            labels=["Child", "Teen", "Adult", "MidAge", "Senior"])
+
+age_train_dummies = pd.get_dummies(train_df["Age_bin"], prefix="AgeBin", dtype=int)
+age_test_dummies = pd.get_dummies(test_df["Age_bin"], prefix="AgeBin", dtype=int)
+train_df = pd.concat([train_df, age_train_dummies], axis=1)
+test_df = pd.concat([test_df, age_test_dummies], axis=1)
+
+train_df.drop(columns=["Age_bin"], inplace=True)
+test_df.drop(columns=["Age_bin"], inplace=True)
+
+
+train_df["Fare_bin"] = pd.qcut(train_df["Fare"], 
+                               4, 
+                               labels=["Low", "Mid", "High", "VeryHigh"])
+test_df["Fare_bin"] = pd.qcut(test_df["Fare"], 
+                              4, 
+                              labels=["Low", "Mid", "High", "VeryHigh"])
+
+fare_train_dummies = pd.get_dummies(train_df["Fare_bin"], prefix="FareBin", dtype=int)
+fare_test_dummies = pd.get_dummies(test_df["Fare_bin"], prefix="FareBin", dtype=int)
+train_df = pd.concat([train_df, fare_train_dummies], axis=1)
+test_df = pd.concat([test_df, fare_test_dummies], axis=1)
+
+train_df.drop(columns=["Fare_bin"], inplace=True)
+test_df.drop(columns=["Fare_bin"], inplace=True)
+
 
 train_df["Sex"] = train_df["Sex"].map({"male": 1, "female": 0})
 test_df["Sex"] = test_df["Sex"].map({"male": 1, "female": 0})
 train_df["Sex_Pclass"] = train_df["Sex"] * train_df["Pclass"]
 test_df["Sex_Pclass"] = test_df["Sex"] * test_df["Pclass"]
 
-corr_family_train = train_df["family_size"].corr(train_df["Survived"])
-print(f"Correlation of family_size with Survived: {corr_family_train}")
-corr_isAlone_train = train_df["isAlone"].corr(train_df["Survived"])
-print(f"Correlation of isAlone with Survived: {corr_isAlone_train}")
+# for safety
+test_df = test_df.reindex(columns=train_df.columns.drop("Survived"), fill_value=0)
+
+# checking correlation of new features with target variable to see if they are useful for us
+for col in ["family_size", "isAlone", "FarePerPerson", "Sex_Pclass"]:
+    corr = train_df[col].corr(train_df["Survived"])
+    print(f"Correlation of {col} with Survived: {corr}")
 
 train_df.drop(columns=["PassengerId", "Name", "Ticket", "Cabin"], inplace=True)
 test_df.drop(columns=["PassengerId", "Name", "Ticket", "Cabin"], inplace=True)
@@ -235,13 +286,12 @@ plt.xlabel("Features")
 plt.tight_layout()
 plt.show()
 
-# final evaluation on test set
+# final evaluation on test set (unseen data)
 final_model = best_model
 final_model.fit(x, y)
-#test_df_final = test_df.drop(columns=drop_cols, errors="ignore")  # drop same columns as in training
-predictions = final_model.predict(x)
-probabilities = final_model.predict_proba(x)[:, 1]
-print("FINAL ROC AUC Score:", roc_auc_score(y, probabilities))
+test_df_final = test_df.drop(columns=drop_cols, errors="ignore")  # drop same columns as in training
+predictions = final_model.predict(test_df_final)
+probabilities = final_model.predict_proba(test_df_final)[:, 1]
 
 # permutation importance for more robust feature importance evaluation
 from sklearn.inspection import permutation_importance
