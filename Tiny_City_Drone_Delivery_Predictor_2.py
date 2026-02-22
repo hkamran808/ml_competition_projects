@@ -86,6 +86,18 @@ train_df["isAlone"] = is_Alone.astype(int)
 is_Alone_test = test_df["family_size"] == 1
 test_df["isAlone"] = is_Alone_test.astype(int)
 
+# boosting feature engineering with fare per person, age bins and sex*class interaction
+train_df["fare_per_person"] = train_df["Fare"] / train_df["family_size"]
+test_df["fare_per_person"] = test_df["Fare"] / test_df["family_size"]
+
+train_df["Age_bin"] = pd.cut(train_df["Age"], bins=5, labels=False)
+test_df["Age_bin"] = pd.cut(test_df["Age"], bins=5, labels=False)
+
+train_df["Sex"] = train_df["Sex"].map({"male": 1, "female": 0})
+test_df["Sex"] = test_df["Sex"].map({"male": 1, "female": 0})
+train_df["Sex_Pclass"] = train_df["Sex"] * train_df["Pclass"]
+test_df["Sex_Pclass"] = test_df["Sex"] * test_df["Pclass"]
+
 corr_family_train = train_df["family_size"].corr(train_df["Survived"])
 print(f"Correlation of family_size with Survived: {corr_family_train}")
 corr_isAlone_train = train_df["isAlone"].corr(train_df["Survived"])
@@ -126,7 +138,8 @@ test_df[["Age", "Fare", "SibSp", "Parch", "family_size"]] = scaler.transform(tes
 """
 # train-test splitting for modeling
 from sklearn.model_selection import train_test_split
-x = train_df.drop(columns=["Survived"])
+drop_cols = ["Embarked_Q", "Embarked_C", "Title_Mrs", "Embarked_S"]
+x = train_df.drop(columns=["Survived"] + drop_cols)
 y = train_df["Survived"]
 X_train, X_test, Y_train, Y_test = train_test_split(x, y, test_size=0.3, random_state=1, stratify=y)
 
@@ -164,22 +177,22 @@ et = ExtraTreesClassifier(
 )
 
 param_grid = {
-    "min_samples_split": [2, 5, 10],
-    "min_samples_leaf": [1, 2, 4],
-    "max_features": ["sqrt", "log2", None],
+    "min_samples_split": [2, 5, 10, 15],
+    "min_samples_leaf": [1, 2, 3, 4],
+    "max_features": ["sqrt", "log2", 0.5],
     "bootstrap": [True, False],
     "class_weight": [None, "balanced"]}
+
+from sklearn.model_selection import StratifiedKFold
+cv_method = StratifiedKFold(n_splits=5, shuffle=True, random_state=1)
 
 grid = GridSearchCV(
     estimator=rf,
     param_grid=param_grid,
     scoring="roc_auc",
-    cv=5,
+    cv=cv_method,
     n_jobs=-1,
     verbose=1)
-
-drop_cols = ["Embarked_Q", "Embarked_C", "Title_Mrs", "Embarked_S"]
-X_cleaned = x.drop(columns=drop_cols)
 
 grid.fit(X_train, Y_train)
 et.fit(X_train, Y_train)
@@ -189,7 +202,7 @@ print("Best CV score:", grid.best_score_)
 
 best_model = grid.best_estimator_
 
-et_cv_scores = cross_val_score(et, X_cleaned, y, cv=5, scoring="roc_auc")
+et_cv_scores = cross_val_score(et, x, y, cv=5, scoring="roc_auc")
 print(f"Extra Trees mean ROC AUC CV score (*PRUNED) => {et_cv_scores.mean()}") # => 0.8492563008100523 (*0.8583039516707629 after pruning)
 
 # Validation ROC AUC evaluation AND other metrics on the validation set
@@ -215,7 +228,7 @@ feat_imp = feat_imp.sort_values(ascending=False)
 import matplotlib.pyplot as plt
 
 plt.figure(figsize=(10,6))
-feat_imp.head(15).plot(kind="bar")
+feat_imp.plot(kind="bar")
 plt.title("Top Feature Importances - Random Forest")
 plt.ylabel("Importance")
 plt.xlabel("Features")
@@ -225,7 +238,10 @@ plt.show()
 # final evaluation on test set
 final_model = best_model
 final_model.fit(x, y)
-predictions = final_model.predict(test_df)
+#test_df_final = test_df.drop(columns=drop_cols, errors="ignore")  # drop same columns as in training
+predictions = final_model.predict(x)
+probabilities = final_model.predict_proba(x)[:, 1]
+print("FINAL ROC AUC Score:", roc_auc_score(y, probabilities))
 
 # permutation importance for more robust feature importance evaluation
 from sklearn.inspection import permutation_importance
