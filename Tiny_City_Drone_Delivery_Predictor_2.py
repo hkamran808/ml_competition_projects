@@ -319,7 +319,7 @@ perm_df = pd.DataFrame({
 
 print(perm_df)
 
-"""
+
 # save predictions to csv for submission
 passenger_ids = test_df["PassengerId"]
 submission = pd.DataFrame({
@@ -328,4 +328,3 @@ submission = pd.DataFrame({
 })
 submission.to_csv("kamran's_titanic_rf_submission.csv", index=False)
 print("Submission file created successfully!", 10*"-", "PROJECT 2 DONE!", sep="\n")
-"""
