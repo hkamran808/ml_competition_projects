@@ -146,11 +146,14 @@ test_df["Sex"] = test_df["Sex"].map({"male": 1, "female": 0})
 train_df["Sex_Pclass"] = train_df["Sex"] * train_df["Pclass"]
 test_df["Sex_Pclass"] = test_df["Sex"] * test_df["Pclass"]
 
+train_df["Age_Pclass"] = train_df["Age"] * train_df["Pclass"]
+test_df["Age_Pclass"] = test_df["Age"] * test_df["Pclass"]
+
 # for safety
 test_df = test_df.reindex(columns=train_df.columns.drop("Survived"), fill_value=0)
 
 # checking correlation of new features with target variable to see if they are useful for us
-for col in ["family_size", "isAlone", "FarePerPerson", "Sex_Pclass"]:
+for col in ["family_size", "isAlone", "FarePerPerson", "Sex_Pclass", "Age_Pclass"]:
     corr = train_df[col].corr(train_df["Survived"])
     print(f"Correlation of {col} with Survived: {corr}")
 
@@ -177,7 +180,7 @@ dummy_test_df1 = pd.get_dummies(test_df["Embarked"], prefix="Embarked", dtype=in
 train_df = pd.concat([train_df, dummy_train_df1], axis=1)
 test_df = pd.concat([test_df, dummy_test_df1], axis=1)
 for df in [train_df, test_df]:
-    df.drop(columns=["Embarked"], inplace=True)
+    df.drop(columns=["Embarked", "SibSp", "FPPBin_Low", "family_size", "AgeBin_Adult"], inplace=True)
 test_df = test_df.reindex(columns=train_df.columns.drop("Survived"), fill_value=0)
 
 """
@@ -212,20 +215,7 @@ probabilities = model.predict_proba(X_test)[:,1] #[:, 0] for class 0 probabiliti
 # AUTOMATIC HYPERPARAMETER TUNING with GridSearchCV
 from sklearn.model_selection import GridSearchCV
 from sklearn.ensemble import ExtraTreesClassifier
-
-rf = RandomForestClassifier(
-    n_estimators=200,
-    max_depth=10,
-    max_leaf_nodes=20,
-    random_state=1,
-    n_jobs=-1)
-
-et = ExtraTreesClassifier(
-    n_estimators=300,
-    random_state=1,
-    n_jobs=-1,
-    class_weight="balanced"
-)
+from sklearn.model_selection import StratifiedKFold
 
 param_grid = {
     "min_samples_split": [2, 5, 10, 15],
@@ -234,10 +224,39 @@ param_grid = {
     "bootstrap": [True, False],
     "class_weight": [None, "balanced"]}
 
-from sklearn.model_selection import StratifiedKFold
 cv_method = StratifiedKFold(n_splits=5, shuffle=True, random_state=1)
 
-grid = GridSearchCV(
+# extra trees for feature importance evaluation and potential boosting of the main model (rf) with insights from it in feature importance
+et = ExtraTreesClassifier(random_state=1, n_jobs=-1)
+et_param_grid = {
+    "n_estimators": [300, 500, 800],
+    "max_depth": [None, 8, 12],
+    "min_samples_split": [2, 5, 10],
+    "min_samples_leaf": [1, 2, 4],
+    "max_features": ["sqrt", "log2"]}
+
+et_grid = GridSearchCV(
+    et,
+    et_param_grid,
+    scoring="roc_auc",
+    cv=cv_method,
+    n_jobs=-1,
+    verbose=1)
+
+et_grid.fit(X_train, Y_train)
+print("Extra Trees BEST SCORE: ", et_grid.best_score_)
+et_cv_scores = cross_val_score(et, x, y, cv=5, scoring="roc_auc")
+print(f"Extra Trees mean ROC AUC CV score (*PRUNED) => {et_cv_scores.mean()}")
+
+# main model: rf
+rf = RandomForestClassifier(
+    n_estimators=200,
+    max_depth=10,
+    max_leaf_nodes=20,
+    random_state=1,
+    n_jobs=-1)
+
+rf_grid = GridSearchCV(
     estimator=rf,
     param_grid=param_grid,
     scoring="roc_auc",
@@ -245,16 +264,11 @@ grid = GridSearchCV(
     n_jobs=-1,
     verbose=1)
 
-grid.fit(X_train, Y_train)
-et.fit(X_train, Y_train)
+rf_grid.fit(X_train, Y_train)
 
-print("Best parameters:", grid.best_params_)
-print("Best CV score:", grid.best_score_)
-
-best_model = grid.best_estimator_
-
-et_cv_scores = cross_val_score(et, x, y, cv=5, scoring="roc_auc")
-print(f"Extra Trees mean ROC AUC CV score (*PRUNED) => {et_cv_scores.mean()}") # => 0.8492563008100523 (*0.8583039516707629 after pruning)
+print("Best parameters:", rf_grid.best_params_)
+print("Best CV score:", rf_grid.best_score_)    
+best_model = rf_grid.best_estimator_
 
 # Validation ROC AUC evaluation AND other metrics on the validation set
 best_model.fit(X_train, Y_train)
