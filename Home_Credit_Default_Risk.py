@@ -35,6 +35,17 @@ print("Numerical features in testing data:\n", test_df.select_dtypes(include=["n
 x = train_df.drop(columns=["TARGET"])
 y = train_df["TARGET"]
 
+# target imbalance check
+print("Target value counts:\n", y.value_counts())
+print("Target value proportions:\n", y.value_counts(normalize=True))
+
+# Missing Value Intelligence (per column) % missing per column (sorted descending)
+missing_values = x.isnull().sum()
+missing_percentages = (missing_values / len(x)) * 100
+missing_values_df = pd.DataFrame({"Missing Count": missing_values, "Percentage": missing_percentages})
+missing_df = missing_values_df[missing_values_df["Missing Count"] > 0].sort_values(by="Percentage", ascending=False)
+print(10*"-", "Missing values per column in training data (sorted by percentage)", 10*"-" + "\n", missing_df)
+
 # train test split
 from sklearn.model_selection import train_test_split
 x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.3, random_state=1)
