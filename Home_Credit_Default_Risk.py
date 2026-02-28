@@ -39,13 +39,19 @@ missing_df = missing_values_df[missing_values_df["Missing Count"] > 0].sort_valu
 print(10*"-", "Missing values per column in training data (sorted by percentage)", 10*"-" + "\n", missing_df)
 
 # For each column with >30% missing: we can consider dropping them or using advanced imputation techniques
+for col in missing_df[missing_df["Percentage"] > 70].index:
+    train_df.drop(columns=[col], inplace=True)
+
 for col in missing_df[missing_df["Percentage"] > 30].index:
     train_df[col + "_IS_MISSING"] = train_df[col].isnull().astype(int)
 
 # credit - income - annuity ratios
+train_df["AMT_ANNUITY"] = train_df["AMT_ANNUITY"].replace(np.nan, 0)
+train_df["AMT_ANNUITY"] = train_df["AMT_ANNUITY"].replace([np.inf, -np.inf], 0)
+
 train_df["CREDIT_INCOME_RATIO"] = train_df["AMT_CREDIT"] / train_df["AMT_INCOME_TOTAL"]
 train_df["ANNUITY_INCOME_RATIO"] = train_df["AMT_ANNUITY"] / train_df["AMT_INCOME_TOTAL"]
-train_df["CREDIT_ANNUITY_RATIO"] = train_df["AMT_CREDIT"] / train_df["AMT_ANNUITY"]
+train_df["CREDIT_ANNUITY_RATIO"] = np.where(train_df["AMT_ANNUITY"] == 0, 0, train_df["AMT_CREDIT"] / train_df["AMT_ANNUITY"])
 
 # income per child & employment ratio (with anomaly value)
 train_df["INCOME_PER_CHILD"] = train_df["AMT_INCOME_TOTAL"] / (train_df["CNT_CHILDREN"] + 1)
@@ -66,8 +72,7 @@ y = train_df["TARGET"]
 print("Target value counts:\n", y.value_counts())
 print("Target value proportions:\n", y.value_counts(normalize=True))
 
-# Handling missing values: Impute with median for numerical features and mode for categorical features if the percentage of missing values is less than 30%
-columns = missing_df[missing_df["Percentage"] <= 30]
+# minimal imputation for now
 if columns.columns.dtypes == "object":
     train_df[columns] = train_df[columns].fillna(train_df[columns].mode().iloc[0])
 elif columns.columns.dtypes == "number":
@@ -78,3 +83,29 @@ elif columns.columns.dtypes == "number":
 from sklearn.model_selection import train_test_split
 x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.3, random_state=1)
 """
+
+# we ll choose kfold instead of train-test, and start with random forest
+from sklearn.model_selection import KFold
+from sklearn.metrics import roc_auc_score
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import GridSearchCV
+
+kfold = KFold(n_splits=5, shuffle=True, random_state=1)
+model = RandomForestClassifier(n_estimators=200, random_state=1)
+
+rf_grid = {
+    "n_estimators": [300, 500, 800],
+    "max_depth": [None, 8, 12],
+    "min_samples_split": [2, 5, 10],
+    "min_samples_leaf": [1, 2, 4],
+    "max_features": ["sqrt", "log2"]}
+
+rf_grid_search = GridSearchCV(
+    model,
+    rf_grid,
+    scoring="roc_auc",
+    cv=kfold,
+    n_jobs=-1,
+    verbose=1)
+
+# to be continued...
