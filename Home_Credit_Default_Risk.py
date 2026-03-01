@@ -65,7 +65,7 @@ if train_df.columns.str.startswith("FLAG_DOCUMENT_").any():
     train_df["TOTAL_DOCUMENT_FLAGS"] = train_df[columns].sum(axis=1)
 
 # redefining target variable and features after doing it pre feature engineering for checking the target imbalance and such
-x = train_df.drop(columns=["TARGET", "SK_ID_CURR"])
+x = train_df.drop(columns=["TARGET", "SK_ID_CURR"], errors="ignore")
 y = train_df["TARGET"]
 
 # target imbalance check
@@ -73,10 +73,14 @@ print("Target value counts:\n", y.value_counts())
 print("Target value proportions:\n", y.value_counts(normalize=True))
 
 # minimal imputation for now
-if columns.columns.dtypes == "object":
-    train_df[columns] = train_df[columns].fillna(train_df[columns].mode().iloc[0])
-elif columns.columns.dtypes == "number":
-    train_df[columns] = train_df[columns].fillna(train_df[columns].median())
+cat_cols = x.select_dtypes(include="object").columns
+num_cols = x.select_dtypes(exclude="object").columns
+for col in cat_cols:
+    x[col] = x[col].fillna(x[col].mode().iloc[0])
+for col in num_cols:
+    x[col] = x[col].fillna(x[col].median())
+
+print("Missing values after imputation:", x.isnull().sum().sum())
 
 """
 # train test split
@@ -85,12 +89,18 @@ x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.3, random_
 """
 
 # we ll choose kfold instead of train-test, and start with random forest
-from sklearn.model_selection import KFold
+from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import roc_auc_score
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import GridSearchCV
 
-kfold = KFold(n_splits=5, shuffle=True, random_state=1)
+# encoding categorical variables using one-hot encoding
+x = pd.get_dummies(x, columns=cat_cols, drop_first=True)
+
+skfold = StratifiedKFold(n_splits=5, shuffle=True, random_state=1)
+oof_preds = np.zeros(len(x))
+feature_importances = np.zeros(x.shape[1])
+
 model = RandomForestClassifier(n_estimators=200, random_state=1)
 
 rf_grid = {
@@ -104,8 +114,38 @@ rf_grid_search = GridSearchCV(
     model,
     rf_grid,
     scoring="roc_auc",
-    cv=kfold,
+    cv=skfold,
     n_jobs=-1,
     verbose=1)
+
+# manual OOP
+for fold, (train_idx, val_idx) in enumerate(skfold.split(x, y)):
+    
+    print(f"Training fold {fold+1}")
+    
+    x_train, x_val = x.iloc[train_idx], x.iloc[val_idx]
+    y_train, y_val = y.iloc[train_idx], y.iloc[val_idx]
+    
+    model.fit(x_train, y_train)
+    val_preds_proba = model.predict_proba(x_val)[:, 1]
+    oof_preds[val_idx] = val_preds_proba
+    
+    fold_roc_auc = roc_auc_score(y_val, val_preds_proba)
+    print(f"Fold {fold+1} ROC AUC: {fold_roc_auc}")
+    
+    # accumulate feature importance
+    feature_importances += model.feature_importances_ / skfold.n_splits
+
+# Final OOF ROC AUC
+final_auc = roc_auc_score(y, oof_preds)
+print("\nFinal OOF ROC AUC:", final_auc)
+
+# Feature Importance
+importance_df = pd.DataFrame({
+    "feature": x.columns,
+    "importance": feature_importances}).sort_values(by="importance", ascending=False)
+
+print(10*"*" + "Top 15 Important Features" + 10*"*")
+print(importance_df.head(15))
 
 # to be continued...
