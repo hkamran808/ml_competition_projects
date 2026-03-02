@@ -119,6 +119,7 @@ rf_grid_search = GridSearchCV(
     verbose=1)
 
 # manual OOP
+fold_scores = []
 for fold, (train_idx, val_idx) in enumerate(skfold.split(x, y)):
     
     print(f"Training fold {fold+1}")
@@ -133,12 +134,19 @@ for fold, (train_idx, val_idx) in enumerate(skfold.split(x, y)):
     fold_roc_auc = roc_auc_score(y_val, val_preds_proba)
     print(f"Fold {fold+1} ROC AUC: {fold_roc_auc}")
     
-    # accumulate feature importance
+    # accumulate feature importance (average by dividing by number of folds)
     feature_importances += model.feature_importances_ / skfold.n_splits
+    fold_scores.append(fold_roc_auc)
 
 # Final OOF ROC AUC
 final_auc = roc_auc_score(y, oof_preds)
-print("\nFinal OOF ROC AUC:", final_auc)
+# mean & std deviation auc
+print("\nFinal OOF ROC AUC => ", final_auc)
+mean_auc = np.mean(fold_scores)
+print("Mean Fold ROC AUC: ", mean_auc)
+std_auc = np.std(fold_scores)
+print("Std Fold ROC AUC: ", std_auc)
+
 
 # Feature Importance
 importance_df = pd.DataFrame({
