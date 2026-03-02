@@ -103,20 +103,18 @@ feature_importances = np.zeros(x.shape[1])
 
 model = RandomForestClassifier(n_estimators=200, random_state=1)
 
-rf_grid = {
-    "n_estimators": [300, 500, 800],
-    "max_depth": [None, 8, 12],
-    "min_samples_split": [2, 5, 10],
-    "min_samples_leaf": [1, 2, 4],
-    "max_features": ["sqrt", "log2"]}
-
-rf_grid_search = GridSearchCV(
-    model,
-    rf_grid,
-    scoring="roc_auc",
-    cv=skfold,
-    n_jobs=-1,
-    verbose=1)
+import lightgbm as lgb
+LGBM_params = {
+    "n_estimators": 10000,
+    "learning_rate": 0.01,
+    "num_leaves": 64,
+    "max_depth": -1,
+    "subsample": 0.8,
+    "colsample_bytree": 0.8,
+    "objective": "binary",
+    "metric": "auc",
+    "random_state": 42,
+    "n_jobs": -1}
 
 # manual OOP
 fold_scores = []
@@ -127,15 +125,21 @@ for fold, (train_idx, val_idx) in enumerate(skfold.split(x, y)):
     x_train, x_val = x.iloc[train_idx], x.iloc[val_idx]
     y_train, y_val = y.iloc[train_idx], y.iloc[val_idx]
     
-    model.fit(x_train, y_train)
-    val_preds_proba = model.predict_proba(x_val)[:, 1]
+    LGBM = lgb.LGBMClassifier(**LGBM_params)
+
+    LGBM.fit(x_train, y_train, 
+             eval_set=[(x_val, y_val)], 
+             eval_metric="auc", 
+             callbacks=[lgb.early_stopping(200), lgb.log_evaluation(100)])
+    
+    val_preds_proba = LGBM.predict_proba(x_val)[:, 1]
     oof_preds[val_idx] = val_preds_proba
     
     fold_roc_auc = roc_auc_score(y_val, val_preds_proba)
     print(f"Fold {fold+1} ROC AUC: {fold_roc_auc}")
     
     # accumulate feature importance (average by dividing by number of folds)
-    feature_importances += model.feature_importances_ / skfold.n_splits
+    feature_importances += LGBM.feature_importances_ / skfold.n_splits
     fold_scores.append(fold_roc_auc)
 
 # Final OOF ROC AUC
