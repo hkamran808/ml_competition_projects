@@ -160,4 +160,15 @@ importance_df = pd.DataFrame({
 print(10*"*" + "Top 15 Important Features" + 10*"*")
 print(importance_df.head(15))
 
+# advanced feature engineering
+x["CREDIT_INCOME_RATIO"] = x["AMT_CREDIT"] / (x["AMT_INCOME_TOTAL"] + 1e-6)
+x["ANNUITY_INCOME_RATIO"] = x["AMT_ANNUITY"] / (x["AMT_INCOME_TOTAL"] + 1e-6)
+x["CREDIT_ANNUITY_RATIO"] = x["AMT_CREDIT"] / (x["AMT_ANNUITY"] + 1e-6)
+x["AGE"] = x["DAYS_BIRTH"].abs() + 1e-6  # handling negative values
+x["EMPLOYED_TO_AGE_RATIO"] = x["DAYS_EMPLOYED"] / (x["AGE"] + 1e-6)
+
+np.log1p(x["AMT_INCOME_TOTAL"])
+np.log1p(x["AMT_CREDIT"])
+np.log1p(x["AMT_ANNUITY"]) # log transformation to handle skewness and outliers in financial data
+
 # to be continued...
