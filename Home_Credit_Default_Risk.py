@@ -49,8 +49,8 @@ for col in missing_df[missing_df["Percentage"] > 30].index:
 train_df["AMT_ANNUITY"] = train_df["AMT_ANNUITY"].replace(np.nan, 0)
 train_df["AMT_ANNUITY"] = train_df["AMT_ANNUITY"].replace([np.inf, -np.inf], 0)
 
-train_df["CREDIT_INCOME_RATIO"] = train_df["AMT_CREDIT"] / train_df["AMT_INCOME_TOTAL"]
-train_df["ANNUITY_INCOME_RATIO"] = train_df["AMT_ANNUITY"] / train_df["AMT_INCOME_TOTAL"]
+train_df["CREDIT_INCOME_RATIO"] = train_df["AMT_CREDIT"] / (train_df["AMT_INCOME_TOTAL"] + 1e-6)
+train_df["ANNUITY_INCOME_RATIO"] = train_df["AMT_ANNUITY"] / (train_df["AMT_INCOME_TOTAL"] + 1e-6)
 train_df["CREDIT_ANNUITY_RATIO"] = np.where(train_df["AMT_ANNUITY"] == 0, 0, train_df["AMT_CREDIT"] / train_df["AMT_ANNUITY"])
 
 # income per child & employment ratio (with anomaly value)
@@ -86,15 +86,19 @@ print("Missing values after imputation:", x.isnull().sum().sum())
 x["CREDIT_INCOME_RATIO"] = x["AMT_CREDIT"] / (x["AMT_INCOME_TOTAL"] + 1e-6)
 x["ANNUITY_INCOME_RATIO"] = x["AMT_ANNUITY"] / (x["AMT_INCOME_TOTAL"] + 1e-6)
 x["CREDIT_ANNUITY_RATIO"] = x["AMT_CREDIT"] / (x["AMT_ANNUITY"] + 1e-6)
-x["AGE"] = x["DAYS_BIRTH"].abs() + 1e-6  # handling negative values
+x["AGE"] = x["DAYS_BIRTH"].abs() / 365.25  # handling negative values
 x["EMPLOYED_TO_AGE_RATIO"] = x["DAYS_EMPLOYED"] / (x["AGE"] + 1e-6)
 
-np.log1p(x["AMT_INCOME_TOTAL"])
-np.log1p(x["AMT_CREDIT"])
-np.log1p(x["AMT_ANNUITY"]) # log transformation to handle skewness and outliers in financial data
+x["AMT_INCOME_TOTAL"] = np.log1p(x["AMT_INCOME_TOTAL"])
+x["AMT_CREDIT"] = np.log1p(x["AMT_CREDIT"])
+x["AMT_ANNUITY"] = np.log1p(x["AMT_ANNUITY"]) # log transformation to handle skewness and outliers in financial data
 
 # binning
-x["AGE_GROUP"] = pd.cut(x["AGE"], bins=[0, 18, 25, 35, 50, np.inf], labels=["<18", "18-25", "26-35", "36-50", "50<"])
+x["AGE_GROUP"] = pd.cut(x["AGE"], bins=[0, 18, 25, 35, 50, np.inf], labels=["_18", "18_25", "26_35", "36_50", "_50_"]).astype(str)
+x = pd.get_dummies(x, columns=["AGE_GROUP"], drop_first=True)  # one-hot encoding for age groups
+x.columns = (x.columns.str.replace(r"[^A-Za-z0-9_]+", "_", regex=True))
+
+x = x.copy()
 
 """
 # train test split
