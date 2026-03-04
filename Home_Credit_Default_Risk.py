@@ -82,6 +82,20 @@ for col in num_cols:
 
 print("Missing values after imputation:", x.isnull().sum().sum())
 
+# advanced feature engineering
+x["CREDIT_INCOME_RATIO"] = x["AMT_CREDIT"] / (x["AMT_INCOME_TOTAL"] + 1e-6)
+x["ANNUITY_INCOME_RATIO"] = x["AMT_ANNUITY"] / (x["AMT_INCOME_TOTAL"] + 1e-6)
+x["CREDIT_ANNUITY_RATIO"] = x["AMT_CREDIT"] / (x["AMT_ANNUITY"] + 1e-6)
+x["AGE"] = x["DAYS_BIRTH"].abs() + 1e-6  # handling negative values
+x["EMPLOYED_TO_AGE_RATIO"] = x["DAYS_EMPLOYED"] / (x["AGE"] + 1e-6)
+
+np.log1p(x["AMT_INCOME_TOTAL"])
+np.log1p(x["AMT_CREDIT"])
+np.log1p(x["AMT_ANNUITY"]) # log transformation to handle skewness and outliers in financial data
+
+# binning
+x["AGE_GROUP"] = pd.cut(x["AGE"], bins=[0, 18, 25, 35, 50, np.inf], labels=["<18", "18-25", "26-35", "36-50", "50<"])
+
 """
 # train test split
 from sklearn.model_selection import train_test_split
@@ -157,18 +171,7 @@ importance_df = pd.DataFrame({
     "feature": x.columns,
     "importance": feature_importances}).sort_values(by="importance", ascending=False)
 
-print(10*"*" + "Top 15 Important Features" + 10*"*")
-print(importance_df.head(15))
-
-# advanced feature engineering
-x["CREDIT_INCOME_RATIO"] = x["AMT_CREDIT"] / (x["AMT_INCOME_TOTAL"] + 1e-6)
-x["ANNUITY_INCOME_RATIO"] = x["AMT_ANNUITY"] / (x["AMT_INCOME_TOTAL"] + 1e-6)
-x["CREDIT_ANNUITY_RATIO"] = x["AMT_CREDIT"] / (x["AMT_ANNUITY"] + 1e-6)
-x["AGE"] = x["DAYS_BIRTH"].abs() + 1e-6  # handling negative values
-x["EMPLOYED_TO_AGE_RATIO"] = x["DAYS_EMPLOYED"] / (x["AGE"] + 1e-6)
-
-np.log1p(x["AMT_INCOME_TOTAL"])
-np.log1p(x["AMT_CREDIT"])
-np.log1p(x["AMT_ANNUITY"]) # log transformation to handle skewness and outliers in financial data
+print(10*"*" + "Top 5 Important Features" + 10*"*")
+print(importance_df.head(5))
 
 # to be continued...
