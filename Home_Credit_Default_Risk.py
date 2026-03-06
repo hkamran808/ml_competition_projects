@@ -96,6 +96,9 @@ x["AMT_ANNUITY"] = np.log1p(x["AMT_ANNUITY"]) # log transformation to handle ske
 # binning
 x["AGE_GROUP"] = pd.cut(x["AGE"], bins=[0, 18, 25, 35, 50, np.inf], labels=["_18", "18_25", "26_35", "36_50", "_50_"]).astype(str)
 x = pd.get_dummies(x, columns=["AGE_GROUP"], drop_first=True)  # one-hot encoding for age groups
+bad_cols = [c for c in x.columns if any(ch in c for ch in ['{','}','[',']','"',':',','])]
+print(bad_cols)
+x.columns = x.columns.astype(str)
 x.columns = (x.columns.str.replace(r"[^A-Za-z0-9_]+", "_", regex=True))
 
 x = x.copy()
