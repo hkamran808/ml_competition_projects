@@ -118,8 +118,13 @@ from sklearn.metrics import roc_auc_score
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import GridSearchCV
 
-# encoding categorical variables using one-hot encoding
-x = pd.get_dummies(x, columns=cat_cols, drop_first=True)
+pos = y.sum()
+neg = len(y) - pos
+scale_pos_weight = neg / pos
+
+print("Positive samples: ", pos)
+print("Negative samples: ", neg)
+print("scale_pos_weight: ", scale_pos_weight)
 
 skfold = StratifiedKFold(n_splits=5, shuffle=True, random_state=1)
 oof_preds = np.zeros(len(x))
@@ -128,6 +133,7 @@ feature_importances = np.zeros(x.shape[1])
 model = RandomForestClassifier(n_estimators=200, random_state=1)
 
 import lightgbm as lgb
+""" # old params
 LGBM_params = {
     "n_estimators": 10000,
     "learning_rate": 0.01,
@@ -137,6 +143,24 @@ LGBM_params = {
     "colsample_bytree": 0.8,
     "objective": "binary",
     "metric": "auc",
+    "random_state": 42,
+    "n_jobs": -1}
+"""
+LGBM_params1 = {
+    "objective": "binary",
+    "metric": "auc",
+    "learning_rate": 0.01,
+    "n_estimators": 12000,
+    "num_leaves": 128,
+    "max_depth": -1,
+    "min_child_samples": 40,
+    "min_child_weight": 0.001,
+    "subsample": 0.8,
+    "subsample_freq": 1,
+    "colsample_bytree": 0.8,
+    "reg_alpha": 0.1,
+    "reg_lambda": 0.1,
+    "scale_pos_weight": scale_pos_weight,
     "random_state": 42,
     "n_jobs": -1}
 
@@ -149,12 +173,12 @@ for fold, (train_idx, val_idx) in enumerate(skfold.split(x, y)):
     x_train, x_val = x.iloc[train_idx], x.iloc[val_idx]
     y_train, y_val = y.iloc[train_idx], y.iloc[val_idx]
     
-    LGBM = lgb.LGBMClassifier(**LGBM_params)
+    LGBM = lgb.LGBMClassifier(**LGBM_params1)
 
     LGBM.fit(x_train, y_train, 
              eval_set=[(x_val, y_val)], 
              eval_metric="auc", 
-             callbacks=[lgb.early_stopping(200), lgb.log_evaluation(100)])
+             callbacks=[lgb.early_stopping(200), lgb.log_evaluation(200)])
     
     val_preds_proba = LGBM.predict_proba(x_val)[:, 1]
     oof_preds[val_idx] = val_preds_proba
@@ -168,8 +192,9 @@ for fold, (train_idx, val_idx) in enumerate(skfold.split(x, y)):
 
 # Final OOF ROC AUC
 final_auc = roc_auc_score(y, oof_preds)
-# mean & std deviation auc
 print("\nFinal OOF ROC AUC => ", final_auc)
+
+# mean & std deviation auc
 mean_auc = np.mean(fold_scores)
 print("Mean Fold ROC AUC: ", mean_auc)
 std_auc = np.std(fold_scores)
@@ -184,15 +209,9 @@ importance_df = pd.DataFrame({
 print(10*"*" + "Top 5 Important Features" + 10*"*")
 print(importance_df.head(5))
 
-"""
-Day 26: Stabilize ML pipeline and fix LightGBM training errors
-
-- Refactored feature engineering into reusable function
-- Applied identical preprocessing to train and test datasets
-- Implemented column alignment after one-hot encoding
-- Sanitized feature names to avoid LightGBM JSON character errors
-- Forced numeric feature types for LightGBM compatibility
-- Added duplicate column protection
-- Stabilized cross-validation training pipeline
-"""
-# to be continued...
+# visualizing feature importance
+plt.figure(figsize=(10, 6))
+plt.title("Feature Importance from LightGBM")
+sns.barplot(x = "importance", y = "feature", data = importance_df)
+plt.tight_layout()
+plt.show()
