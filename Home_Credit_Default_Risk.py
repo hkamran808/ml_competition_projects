@@ -236,3 +236,7 @@ submission_kaggle = pd.DataFrame({
 
 submission_kaggle.to_csv("kamran's_submission.csv", index=False)
 print("PROJECT DONE!")
+
+import joblib
+joblib.dump(final_model, "lgbm_credit_default_model.pkl")
+print("Model saved successfully!")
