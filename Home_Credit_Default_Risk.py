@@ -118,6 +118,7 @@ from sklearn.metrics import roc_auc_score
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import GridSearchCV
 
+# adding weighting to penalize the model leaning towards the majority class (non-defaults) creating imbalance
 pos = y.sum()
 neg = len(y) - pos
 scale_pos_weight = neg / pos
@@ -130,7 +131,7 @@ skfold = StratifiedKFold(n_splits=5, shuffle=True, random_state=1)
 oof_preds = np.zeros(len(x))
 feature_importances = np.zeros(x.shape[1])
 
-model = RandomForestClassifier(n_estimators=200, random_state=1)
+#model = RandomForestClassifier(n_estimators=200, random_state=1) # not needed since using lightgbm, but we can use it for baseline and comparison if we want
 
 import lightgbm as lgb
 """ # old params
@@ -215,3 +216,23 @@ plt.title("Feature Importance from LightGBM")
 sns.barplot(x = "importance", y = "feature", data = importance_df)
 plt.tight_layout()
 plt.show()
+
+
+# test-train alignment
+test_x = test_df.drop(columns=["SK_ID_CURR"], errors="ignore")
+test_x = pd.get_dummies(test_x)
+test_x = test_x.reindex(columns=x.columns, fill_value=0)
+
+# final training on full data and predicting on test set
+print(10*"*" + "Final Training and Prediction" + 10*"*")
+final_model = lgb.LGBMClassifier(**LGBM_params1)
+final_model.fit(x, y, eval_metric="auc") # no need for callbacks=[...] since we use all data to train - no any validation dataset
+predictions_probability = final_model.predict_proba(test_x)[:, 1]
+
+# competition format requires sk id curr and target """
+submission_kaggle = pd.DataFrame({
+    "SK_ID_CURR": test_df["SK_ID_CURR"],
+    "TARGET": predictions_probability})
+
+submission_kaggle.to_csv("kamran's_submission.csv", index=False)
+print("PROJECT DONE!")
